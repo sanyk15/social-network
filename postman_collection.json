@@ -1,0 +1,125 @@
+{
+	"info": {
+		"_postman_id": "social-network-skeleton",
+		"name": "Social Network — Заготовка",
+		"description": "Создание и просмотр анкет: регистрация → логин → получение анкеты по ID. Переменные userId и token подставляются автоматически из ответов.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080"
+		},
+		{
+			"key": "userId",
+			"value": ""
+		},
+		{
+			"key": "token",
+			"value": ""
+		}
+	],
+	"item": [
+		{
+			"name": "1. Register user",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"const body = pm.response.json();",
+							"if (body && body.id) pm.collectionVariables.set('userId', body.id);"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"username\": \"alice\",\n  \"password\": \"secret123\",\n  \"first_name\": \"Алиса\",\n  \"last_name\": \"Иванова\",\n  \"birth_date\": \"1995-04-12\",\n  \"gender\": \"female\",\n  \"interests\": [\"programming\", \"music\"],\n  \"city\": \"Москва\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/user/register",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"user",
+						"register"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "2. Login",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"const body = pm.response.json();",
+							"if (body && body.token) pm.collectionVariables.set('token', body.token);"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"username\": \"alice\",\n  \"password\": \"secret123\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/login",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"login"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "3. Get profile by id",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{token}}"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}/user/get/{{userId}}",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"user",
+						"get",
+						"{{userId}}"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
