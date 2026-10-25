@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -129,18 +130,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
-	token, ok := bearerToken(r)
-	if !ok {
-		writeError(w, http.StatusUnauthorized, "missing or malformed Authorization header")
-		return
-	}
-	if _, err := h.store.UserIDByToken(r.Context(), token); err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusUnauthorized, "invalid or expired token")
-			return
-		}
-		log.Printf("get user: auth: %v", err)
-		writeError(w, http.StatusInternalServerError, "internal error")
+	if !h.authorize(w, r) {
 		return
 	}
 
@@ -162,4 +152,48 @@ func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, u)
+}
+
+// Search returns profiles whose first and last names start with the given
+// prefixes. Both query parameters are required.
+func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
+	if !h.authorize(w, r) {
+		return
+	}
+
+	q := r.URL.Query()
+	firstName := strings.TrimSpace(q.Get("first_name"))
+	lastName := strings.TrimSpace(q.Get("last_name"))
+	if firstName == "" || lastName == "" {
+		writeError(w, http.StatusBadRequest, "first_name and last_name are required")
+		return
+	}
+
+	users, err := h.store.SearchUsers(r.Context(), firstName, lastName)
+	if err != nil {
+		log.Printf("search: %v", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, users)
+}
+
+// authorize validates the bearer token, writing the error response itself.
+func (h *Handler) authorize(w http.ResponseWriter, r *http.Request) bool {
+	token, ok := bearerToken(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "missing or malformed Authorization header")
+		return false
+	}
+	if _, err := h.store.UserIDByToken(r.Context(), token); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusUnauthorized, "invalid or expired token")
+			return false
+		}
+		log.Printf("auth: %v", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return false
+	}
+	return true
 }

@@ -1,5 +1,7 @@
 .env
 *.log
 bin/
+bench/.venv/
 .idea/
 vendor/
+CLAUDE.md

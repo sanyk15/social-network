@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -35,8 +36,21 @@ type Store struct {
 	pool *pgxpool.Pool
 }
 
-func New(ctx context.Context, databaseURL string) (*Store, error) {
-	pool, err := pgxpool.New(ctx, databaseURL)
+func New(ctx context.Context, databaseURL string, maxConns int32) (*Store, error) {
+	cfg, err := pgxpool.ParseConfig(databaseURL)
+	if err != nil {
+		return nil, err
+	}
+	if maxConns > 0 {
+		cfg.MaxConns = maxConns
+	}
+
+	// LIKE 'prefix%' can use a btree index only when the planner knows the
+	// pattern at plan time. Force custom plans so cached prepared statements
+	// keep using the search index instead of falling back to a generic plan.
+	cfg.ConnConfig.RuntimeParams["plan_cache_mode"] = "force_custom_plan"
+
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -83,6 +97,43 @@ func (s *Store) GetUserByID(ctx context.Context, id int64) (User, error) {
 		return User{}, ErrNotFound
 	}
 	return u, err
+}
+
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
+// escapeLikePrefix turns user input into a literal prefix pattern: wildcard
+// characters are escaped and a trailing '%' is appended.
+func escapeLikePrefix(s string) string {
+	return likeEscaper.Replace(s) + "%"
+}
+
+// SearchUsers returns profiles whose first and last names start with the given
+// prefixes, ordered by id.
+func (s *Store) SearchUsers(ctx context.Context, firstName, lastName string) ([]User, error) {
+	const q = `
+		SELECT id, username, first_name, last_name, birth_date::text, gender, interests, city
+		FROM users
+		WHERE first_name LIKE $1 ESCAPE '\'
+		  AND last_name  LIKE $2 ESCAPE '\'
+		ORDER BY id`
+
+	rows, err := s.pool.Query(ctx, q, escapeLikePrefix(firstName), escapeLikePrefix(lastName))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	users := make([]User, 0)
+	for rows.Next() {
+		var u User
+		if err := rows.Scan(
+			&u.ID, &u.Username, &u.FirstName, &u.LastName, &u.BirthDate, &u.Gender, &u.Interests, &u.City,
+		); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, rows.Err()
 }
 
 func (s *Store) GetCredentialByUsername(ctx context.Context, username string) (Credential, error) {

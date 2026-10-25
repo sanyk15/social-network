@@ -15,7 +15,7 @@ func main() {
 	cfg := config.Load()
 
 	ctx := context.Background()
-	st, err := store.New(ctx, cfg.DatabaseURL)
+	st, err := store.New(ctx, cfg.DatabaseURL, cfg.DBMaxConns)
 	if err != nil {
 		log.Fatalf("connect to database: %v", err)
 	}
@@ -31,10 +31,16 @@ func main() {
 	mux.HandleFunc("POST /login", h.Login)
 	mux.HandleFunc("POST /user/register", h.Register)
 	mux.HandleFunc("GET /user/get/{id}", h.GetUser)
+	mux.HandleFunc("GET /user/search", h.Search)
+
+	var handler http.Handler = mux
+	if cfg.LogRequests {
+		handler = httpapi.LogRequests(mux)
+	}
 
 	srv := &http.Server{
 		Addr:    cfg.HTTPAddr,
-		Handler: httpapi.LogRequests(mux),
+		Handler: handler,
 	}
 
 	log.Printf("listening on %s", cfg.HTTPAddr)

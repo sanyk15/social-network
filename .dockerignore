@@ -4,3 +4,4 @@ bin/
 *.log
 .idea/
 vendor/
+CLAUDE.md
