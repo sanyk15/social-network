@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"errors"
 	"log"
 	"net/http"
@@ -98,7 +99,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cred, err := h.store.GetCredentialByUsername(r.Context(), req.Username)
+	cred, err := h.store.GetCredentialByUsername(h.store.WithReadOnly(r.Context()), req.Username)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeError(w, http.StatusUnauthorized, "invalid credentials")
@@ -130,7 +131,8 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
-	if !h.authorize(w, r) {
+	ctx := h.store.WithReadOnly(r.Context())
+	if !h.authorize(ctx, r, w) {
 		return
 	}
 
@@ -140,7 +142,7 @@ func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	u, err := h.store.GetUserByID(r.Context(), id)
+	u, err := h.store.GetUserByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "user not found")
@@ -157,7 +159,8 @@ func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
 // Search returns profiles whose first and last names start with the given
 // prefixes. Both query parameters are required.
 func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
-	if !h.authorize(w, r) {
+	ctx := h.store.WithReadOnly(r.Context())
+	if !h.authorize(ctx, r, w) {
 		return
 	}
 
@@ -169,7 +172,7 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	users, err := h.store.SearchUsers(r.Context(), firstName, lastName)
+	users, err := h.store.SearchUsers(ctx, firstName, lastName)
 	if err != nil {
 		log.Printf("search: %v", err)
 		writeError(w, http.StatusInternalServerError, "internal error")
@@ -180,13 +183,13 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 }
 
 // authorize validates the bearer token, writing the error response itself.
-func (h *Handler) authorize(w http.ResponseWriter, r *http.Request) bool {
+func (h *Handler) authorize(ctx context.Context, r *http.Request, w http.ResponseWriter) bool {
 	token, ok := bearerToken(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "missing or malformed Authorization header")
 		return false
 	}
-	if _, err := h.store.UserIDByToken(r.Context(), token); err != nil {
+	if _, err := h.store.UserIDByToken(ctx, token); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeError(w, http.StatusUnauthorized, "invalid or expired token")
 			return false

@@ -1,30 +1,135 @@
+# Replication lab: one primary and two physical streaming replicas.
+#
+#   docker compose up -d --build
+#   docker compose --profile seed run --rm seed
+#
+# The application routes reads to the replicas and writes to pg-master.
+name: social-replication
+
+x-postgres-env: &postgres-env
+  POSTGRES_USER: social
+  POSTGRES_PASSWORD: social
+  POSTGRES_DB: social
+
 services:
-  db:
+  pg-master:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: social
-      POSTGRES_PASSWORD: social
-      POSTGRES_DB: social
+      <<: *postgres-env
+      REPLICATION_USER: replicator
+      REPLICATION_PASSWORD: replpass
+    command:
+      - postgres
+      - -c
+      - wal_level=replica
+      - -c
+      - max_wal_senders=10
+      - -c
+      - max_replication_slots=10
+      - -c
+      - wal_keep_size=1GB
+      - -c
+      - hot_standby=on
+      - -c
+      - synchronous_commit=on
+      - -c
+      - listen_addresses=*
+    volumes:
+      - pg_master_data:/var/lib/postgresql/data
+      - ./deploy/postgres/master-init.sh:/docker-entrypoint-initdb.d/10-replication.sh:ro
     ports:
       - "5432:5432"
-    volumes:
-      - social_pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U social -d social"]
       interval: 5s
       timeout: 3s
-      retries: 10
+      retries: 20
+
+  pg-slave-1:
+    image: postgres:16-alpine
+    environment:
+      <<: *postgres-env
+      MASTER_HOST: pg-master
+      REPLICATION_USER: replicator
+      REPLICATION_PASSWORD: replpass
+      REPLICA_NAME: pg-slave-1
+    entrypoint: ["/bin/bash", "/scripts/slave-entrypoint.sh"]
+    volumes:
+      - pg_slave_1_data:/var/lib/postgresql/data
+      - ./deploy/postgres/slave-entrypoint.sh:/scripts/slave-entrypoint.sh:ro
+    ports:
+      - "5433:5432"
+    depends_on:
+      pg-master:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U social -d social"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  pg-slave-2:
+    image: postgres:16-alpine
+    environment:
+      <<: *postgres-env
+      MASTER_HOST: pg-master
+      REPLICATION_USER: replicator
+      REPLICATION_PASSWORD: replpass
+      REPLICA_NAME: pg-slave-2
+    entrypoint: ["/bin/bash", "/scripts/slave-entrypoint.sh"]
+    volumes:
+      - pg_slave_2_data:/var/lib/postgresql/data
+      - ./deploy/postgres/slave-entrypoint.sh:/scripts/slave-entrypoint.sh:ro
+    ports:
+      - "5434:5432"
+    depends_on:
+      pg-master:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U social -d social"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
 
   app:
-    build: .
+    build:
+      context: .
+      target: app
     environment:
       HTTP_ADDR: ":8080"
-      DATABASE_URL: "postgres://social:social@db:5432/social?sslmode=disable"
+      DATABASE_URL: "${DATABASE_URL:-postgres://social:social@pg-master:5432/social?sslmode=disable}"
+      DATABASE_REPLICA_URLS: "${DATABASE_REPLICA_URLS:-postgres://social:social@pg-slave-1:5432/social?sslmode=disable,postgres://social:social@pg-slave-2:5432/social?sslmode=disable}"
+      DB_MAX_CONNS: "${DB_MAX_CONNS:-16}"
+      LOG_REQUESTS: "false"
+      ENABLE_TEST_API: "true"
+      READ_FALLBACK_TO_MASTER: "true"
     ports:
       - "8080:8080"
     depends_on:
-      db:
+      pg-master:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/readyz || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  seed:
+    build:
+      context: .
+      target: seed
+    profiles: ["seed"]
+    environment:
+      DATABASE_URL: "postgres://social:social@pg-master:5432/social?sslmode=disable"
+      DB_MAX_CONNS: "8"
+    volumes:
+      - "${SEED_CSV:-../people.v2.csv}:/data/people.v2.csv:ro"
+    command: ["-csv", "/data/people.v2.csv", "-n", "${SEED_N:-1000000}", "-truncate"]
+    depends_on:
+      pg-master:
         condition: service_healthy
 
 volumes:
-  social_pgdata:
+  pg_master_data:
+  pg_slave_1_data:
+  pg_slave_2_data:

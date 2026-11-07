@@ -2,6 +2,7 @@
 *.log
 bin/
 bench/.venv/
+load/results/
 .idea/
 vendor/
 CLAUDE.md

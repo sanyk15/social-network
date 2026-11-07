@@ -42,7 +42,7 @@ func (s *Store) InsertUsersBatch(ctx context.Context, users []UserSeed) error {
 		}
 	}
 
-	_, err := s.pool.CopyFrom(ctx,
+	_, err := s.master.CopyFrom(ctx,
 		pgx.Identifier{"users"},
 		[]string{"username", "password_hash", "first_name", "last_name", "birth_date", "gender", "interests", "city"},
 		pgx.CopyFromRows(rows),
@@ -52,12 +52,12 @@ func (s *Store) InsertUsersBatch(ctx context.Context, users []UserSeed) error {
 
 // TruncateUsers removes all profiles and dependent sessions.
 func (s *Store) TruncateUsers(ctx context.Context) error {
-	_, err := s.pool.Exec(ctx, `TRUNCATE users RESTART IDENTITY CASCADE`)
+	_, err := s.master.Exec(ctx, `TRUNCATE users RESTART IDENTITY CASCADE`)
 	return err
 }
 
 // AnalyzeUsers refreshes planner statistics after a bulk load.
 func (s *Store) AnalyzeUsers(ctx context.Context) error {
-	_, err := s.pool.Exec(ctx, `ANALYZE users`)
+	_, err := s.master.Exec(ctx, `ANALYZE users`)
 	return err
 }

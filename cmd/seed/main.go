@@ -72,7 +72,10 @@ func main() {
 		people[i], people[j] = people[j], people[i]
 	})
 
-	st, err := store.New(ctx, *dsn, cfg.DBMaxConns)
+	st, err := store.New(ctx, store.Config{
+		MasterURL: *dsn,
+		MaxConns:  cfg.DBMaxConns,
+	})
 	if err != nil {
 		log.Fatalf("connect to database: %v", err)
 	}

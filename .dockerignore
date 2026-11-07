@@ -2,6 +2,7 @@
 .env
 bin/
 *.log
+load/results/
 .idea/
 vendor/
 CLAUDE.md

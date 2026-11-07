@@ -15,7 +15,12 @@ func main() {
 	cfg := config.Load()
 
 	ctx := context.Background()
-	st, err := store.New(ctx, cfg.DatabaseURL, cfg.DBMaxConns)
+	st, err := store.New(ctx, store.Config{
+		MasterURL:    cfg.DatabaseURL,
+		ReplicaURLs:  cfg.DatabaseReplicaURLs,
+		MaxConns:     cfg.DBMaxConns,
+		ReadFallback: cfg.ReadFallbackToMaster,
+	})
 	if err != nil {
 		log.Fatalf("connect to database: %v", err)
 	}
@@ -32,6 +37,13 @@ func main() {
 	mux.HandleFunc("POST /user/register", h.Register)
 	mux.HandleFunc("GET /user/get/{id}", h.GetUser)
 	mux.HandleFunc("GET /user/search", h.Search)
+	mux.HandleFunc("GET /healthz", h.Health)
+	mux.HandleFunc("GET /readyz", h.Ready)
+	if cfg.EnableTestAPI {
+		mux.HandleFunc("POST /test/write", h.TestWrite)
+		mux.HandleFunc("GET /test/write/count", h.TestWriteCount)
+		mux.HandleFunc("GET /test/replication", h.TestReplication)
+	}
 
 	var handler http.Handler = mux
 	if cfg.LogRequests {
