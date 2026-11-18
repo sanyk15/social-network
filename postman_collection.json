@@ -1,8 +1,8 @@
 {
   "info": {
-    "_postman_id": "social-network-skeleton",
-    "name": "Social Network — Заготовка",
-    "description": "Создание и просмотр анкет, поиск: регистрация → логин → получение анкеты по ID → поиск по префиксам. Переменные userId и token подставляются автоматически из ответов.",
+    "_postman_id": "social-network-feed",
+    "name": "Social Network — Дружба, посты и лента",
+    "description": "ДЗ-4: регистрация двух пользователей, дружба, CRUD постов и лента друзей. userId, secondUserId, token и postId подставляются автоматически. Требуется ENABLE_TEST_API=true для запроса перестройки кэша.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -11,11 +11,27 @@
       "value": "http://localhost:8080"
     },
     {
+      "key": "username",
+      "value": ""
+    },
+    {
+      "key": "secondUsername",
+      "value": ""
+    },
+    {
       "key": "userId",
       "value": ""
     },
     {
+      "key": "secondUserId",
+      "value": ""
+    },
+    {
       "key": "token",
+      "value": ""
+    },
+    {
+      "key": "postId",
       "value": ""
     }
   ],
@@ -24,13 +40,23 @@
       "name": "1. Register user",
       "event": [
         {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set('username', 'postman_alice_' + Date.now());"
+            ]
+          }
+        },
+        {
           "listen": "test",
           "script": {
+            "type": "text/javascript",
             "exec": [
+              "pm.test('status 201', () => pm.response.to.have.status(201));",
               "const body = pm.response.json();",
-              "if (body && body.id) pm.collectionVariables.set('userId', body.id);"
-            ],
-            "type": "text/javascript"
+              "pm.collectionVariables.set('userId', body.id);"
+            ]
           }
         }
       ],
@@ -44,32 +70,72 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"username\": \"alice\",\n  \"password\": \"secret123\",\n  \"first_name\": \"Алиса\",\n  \"last_name\": \"Иванова\",\n  \"birth_date\": \"1995-04-12\",\n  \"gender\": \"female\",\n  \"interests\": [\"programming\", \"music\"],\n  \"city\": \"Москва\"\n}"
+          "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"secret123\",\n  \"first_name\": \"Алиса\",\n  \"last_name\": \"Иванова\",\n  \"birth_date\": \"1995-04-12\",\n  \"gender\": \"female\",\n  \"interests\": [\"programming\", \"music\"],\n  \"city\": \"Москва\"\n}"
         },
         "url": {
           "raw": "{{baseUrl}}/user/register",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "user",
-            "register"
-          ]
+          "host": ["{{baseUrl}}"],
+          "path": ["user", "register"]
         }
       },
       "response": []
     },
     {
-      "name": "2. Login",
+      "name": "2. Register second user",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set('secondUsername', 'postman_bob_' + Date.now());"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 201', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('secondUserId', body.id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{secondUsername}}\",\n  \"password\": \"secret123\",\n  \"first_name\": \"Борис\",\n  \"last_name\": \"Петров\",\n  \"birth_date\": \"1992-08-01\",\n  \"gender\": \"male\",\n  \"interests\": [\"sport\"],\n  \"city\": \"Санкт-Петербург\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/user/register",
+          "host": ["{{baseUrl}}"],
+          "path": ["user", "register"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "3. Login",
       "event": [
         {
           "listen": "test",
           "script": {
+            "type": "text/javascript",
             "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
               "const body = pm.response.json();",
-              "if (body && body.token) pm.collectionVariables.set('token', body.token);"
-            ],
-            "type": "text/javascript"
+              "pm.collectionVariables.set('token', body.token);"
+            ]
           }
         }
       ],
@@ -83,22 +149,18 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"username\": \"alice\",\n  \"password\": \"secret123\"\n}"
+          "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"secret123\"\n}"
         },
         "url": {
           "raw": "{{baseUrl}}/login",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "login"
-          ]
+          "host": ["{{baseUrl}}"],
+          "path": ["login"]
         }
       },
       "response": []
     },
     {
-      "name": "3. Get profile by id",
+      "name": "4. Get profile by id",
       "request": {
         "method": "GET",
         "header": [
@@ -109,30 +171,129 @@
         ],
         "url": {
           "raw": "{{baseUrl}}/user/get/{{userId}}",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "user",
-            "get",
-            "{{userId}}"
+          "host": ["{{baseUrl}}"],
+          "path": ["user", "get", "{{userId}}"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "5. Search users",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/user/search?first_name=Конст&last_name=Оси",
+          "host": ["{{baseUrl}}"],
+          "path": ["user", "search"],
+          "query": [
+            {
+              "key": "first_name",
+              "value": "Конст"
+            },
+            {
+              "key": "last_name",
+              "value": "Оси"
+            }
           ]
         }
       },
       "response": []
     },
     {
-      "name": "4. Search users",
+      "name": "6. Add friend",
       "event": [
         {
           "listen": "test",
           "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.test('friendship created', () => pm.expect(pm.response.json().created).to.be.a('boolean'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"user_id\": {{secondUserId}}\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/friend/add",
+          "host": ["{{baseUrl}}"],
+          "path": ["friend", "add"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "7. Create post",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
             "exec": [
               "pm.test('status 200', () => pm.response.to.have.status(200));",
               "const body = pm.response.json();",
-              "pm.test('response is an array', () => pm.expect(body).to.be.an('array'));"
-            ],
-            "type": "text/javascript"
+              "pm.collectionVariables.set('postId', body.id);",
+              "pm.test('id returned', () => pm.expect(body.id).to.be.a('number'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"text\": \"Первый пост из Postman\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/post/create",
+          "host": ["{{baseUrl}}"],
+          "path": ["post", "create"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "8. Get post",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.test('same post', () => pm.expect(String(pm.response.json().id)).to.eql(String(pm.collectionVariables.get('postId'))));"
+            ]
           }
         }
       ],
@@ -145,24 +306,205 @@
           }
         ],
         "url": {
-          "raw": "{{baseUrl}}/user/search?first_name=Конст&last_name=Оси",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "user",
-            "search"
-          ],
+          "raw": "{{baseUrl}}/post/get/{{postId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["post", "get", "{{postId}}"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "9. Update post",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.test('new text', () => pm.expect(pm.response.json().post.text).to.eql('Отредактированный текст'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": {{postId}},\n  \"text\": \"Отредактированный текст\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/post/update",
+          "host": ["{{baseUrl}}"],
+          "path": ["post", "update"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "10. Feed contains the post",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('is an array', () => pm.expect(body).to.be.an('array'));",
+              "pm.test('post is in the feed', () => pm.expect(body.map(p => String(p.id))).to.include(String(pm.collectionVariables.get('postId'))));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/post/feed?limit=10&offset=0",
+          "host": ["{{baseUrl}}"],
+          "path": ["post", "feed"],
           "query": [
             {
-              "key": "first_name",
-              "value": "Конст"
+              "key": "limit",
+              "value": "10"
             },
             {
-              "key": "last_name",
-              "value": "Оси"
+              "key": "offset",
+              "value": "0"
             }
           ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "11. Delete post",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": {{postId}}\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/post/delete",
+          "host": ["{{baseUrl}}"],
+          "path": ["post", "delete"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "12. Feed no longer contains the post",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('post is gone from the feed', () => pm.expect(body.map(p => String(p.id))).to.not.include(String(pm.collectionVariables.get('postId'))));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/post/feed?limit=10&offset=0",
+          "host": ["{{baseUrl}}"],
+          "path": ["post", "feed"],
+          "query": [
+            {
+              "key": "limit",
+              "value": "10"
+            },
+            {
+              "key": "offset",
+              "value": "0"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "13. Rebuild feed cache from the database",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.test('one feed rebuilt', () => pm.expect(pm.response.json().rebuilt).to.eql(1));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"user_id\": {{userId}}\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/admin/feed/rebuild",
+          "host": ["{{baseUrl}}"],
+          "path": ["admin", "feed", "rebuild"]
         }
       },
       "response": []

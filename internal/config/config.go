@@ -16,6 +16,15 @@ type Config struct {
 	LogRequests          bool
 	ReadFallbackToMaster bool
 	EnableTestAPI        bool
+
+	RedisURL        string
+	FeedSize        int
+	FeedCacheTTL    time.Duration
+	FriendsCacheTTL time.Duration
+	PostCacheTTL    time.Duration
+	FeedIncludeOwn  bool
+	FeedFanoutMode  string
+	FeedWorkers     int
 }
 
 func Load() Config {
@@ -28,6 +37,15 @@ func Load() Config {
 		LogRequests:          getenvBool("LOG_REQUESTS", true),
 		ReadFallbackToMaster: getenvBool("READ_FALLBACK_TO_MASTER", true),
 		EnableTestAPI:        getenvBool("ENABLE_TEST_API", false),
+
+		RedisURL:        getenv("REDIS_URL", "redis://localhost:6379/0"),
+		FeedSize:        getenvInt("FEED_SIZE", 1000),
+		FeedCacheTTL:    getenvDuration("FEED_CACHE_TTL", 10*time.Minute),
+		FriendsCacheTTL: getenvDuration("FRIENDS_CACHE_TTL", 10*time.Minute),
+		PostCacheTTL:    getenvDuration("POST_CACHE_TTL", time.Hour),
+		FeedIncludeOwn:  getenvBool("FEED_INCLUDE_OWN", true),
+		FeedFanoutMode:  getenv("FEED_FANOUT_MODE", "sync"),
+		FeedWorkers:     getenvInt("FEED_WORKERS", 2),
 	}
 }
 
@@ -60,6 +78,18 @@ func getenvBool(key string, fallback bool) bool {
 		return fallback
 	}
 	return b
+}
+
+func getenvDuration(key string, fallback time.Duration) time.Duration {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil || d <= 0 {
+		return fallback
+	}
+	return d
 }
 
 // splitURLs parses a comma-separated list of DSNs, dropping empty entries.

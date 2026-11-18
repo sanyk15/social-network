@@ -11,6 +11,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
+	"social-network/internal/feed"
 	"social-network/internal/store"
 )
 
@@ -18,11 +19,12 @@ const maxBodyBytes = 1 << 20
 
 type Handler struct {
 	store *store.Store
+	feed  *feed.Service
 	ttl   time.Duration
 }
 
-func New(s *store.Store, ttl time.Duration) *Handler {
-	return &Handler{store: s, ttl: ttl}
+func New(s *store.Store, f *feed.Service, ttl time.Duration) *Handler {
+	return &Handler{store: s, feed: f, ttl: ttl}
 }
 
 type registerRequest struct {
@@ -183,20 +185,8 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 }
 
 // authorize validates the bearer token, writing the error response itself.
+// Endpoints that need the user id call authenticate directly.
 func (h *Handler) authorize(ctx context.Context, r *http.Request, w http.ResponseWriter) bool {
-	token, ok := bearerToken(r)
-	if !ok {
-		writeError(w, http.StatusUnauthorized, "missing or malformed Authorization header")
-		return false
-	}
-	if _, err := h.store.UserIDByToken(ctx, token); err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusUnauthorized, "invalid or expired token")
-			return false
-		}
-		log.Printf("auth: %v", err)
-		writeError(w, http.StatusInternalServerError, "internal error")
-		return false
-	}
-	return true
+	_, ok := h.authenticate(ctx, r, w)
+	return ok
 }

@@ -91,6 +91,19 @@ services:
       timeout: 3s
       retries: 30
 
+  redis:
+    image: redis:7-alpine
+    # The feed cache is rebuildable from PostgreSQL, so Redis persistence is
+    # intentionally disabled: a restart is just a cold cache.
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   app:
     build:
       context: .
@@ -103,10 +116,19 @@ services:
       LOG_REQUESTS: "false"
       ENABLE_TEST_API: "true"
       READ_FALLBACK_TO_MASTER: "true"
+      REDIS_URL: "${REDIS_URL:-redis://redis:6379/0}"
+      FEED_SIZE: "${FEED_SIZE:-1000}"
+      FEED_CACHE_TTL: "${FEED_CACHE_TTL:-10m}"
+      POST_CACHE_TTL: "${POST_CACHE_TTL:-1h}"
+      FEED_INCLUDE_OWN: "${FEED_INCLUDE_OWN:-true}"
+      FEED_FANOUT_MODE: "${FEED_FANOUT_MODE:-sync}"
+      FEED_WORKERS: "${FEED_WORKERS:-2}"
     ports:
       - "8080:8080"
     depends_on:
       pg-master:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/readyz || exit 1"]
@@ -127,6 +149,53 @@ services:
     command: ["-csv", "/data/people.v2.csv", "-n", "${SEED_N:-1000000}", "-truncate"]
     depends_on:
       pg-master:
+        condition: service_healthy
+
+  # Дружба и посты для первых N пользователей. По умолчанию тексты генерируются;
+  # чтобы взять файл курса, смонтируйте его и передайте -posts-file:
+  #
+  #   docker compose --profile seed run --rm -v "$PWD/../posts.txt:/data/posts.txt:ro" \
+  #     seedfeed -posts-file /data/posts.txt
+  seedfeed:
+    build:
+      context: .
+      target: seedfeed
+    profiles: ["seed"]
+    environment:
+      DATABASE_URL: "postgres://social:social@pg-master:5432/social?sslmode=disable"
+      REDIS_URL: "redis://redis:6379/0"
+      DB_MAX_CONNS: "8"
+    command:
+      - "-users"
+      - "${SEED_FEED_USERS:-1000}"
+      - "-friends"
+      - "${SEED_FEED_FRIENDS:-20}"
+      - "-posts"
+      - "${SEED_FEED_POSTS:-100000}"
+      - "-truncate"
+    depends_on:
+      pg-master:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Перестройка кэшей лент из СУБД:
+  #   docker compose --profile admin run --rm feedrebuild -user-id 42
+  #   docker compose --profile admin run --rm feedrebuild -all
+  feedrebuild:
+    build:
+      context: .
+      target: feedrebuild
+    profiles: ["admin"]
+    environment:
+      DATABASE_URL: "postgres://social:social@pg-master:5432/social?sslmode=disable"
+      REDIS_URL: "redis://redis:6379/0"
+      DB_MAX_CONNS: "4"
+    command: ["-all"]
+    depends_on:
+      pg-master:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
 volumes:

@@ -23,6 +23,17 @@ services:
       timeout: 3s
       retries: 20
 
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   app:
     build:
       context: .
@@ -34,10 +45,13 @@ services:
       DB_MAX_CONNS: "${DB_MAX_CONNS:-16}"
       LOG_REQUESTS: "false"
       ENABLE_TEST_API: "true"
+      REDIS_URL: "redis://redis:6379/0"
     ports:
       - "8080:8080"
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/readyz || exit 1"]
